@@ -13,10 +13,7 @@ for fpath in glob.glob('./eval_data/*.pkl'):
         perplexities = data['perplexities']
         perplexities = np.nan_to_num(perplexities, 100)
         perplexities = np.clip(perplexities, 0, 100)
-        if 'nomic' in fpath:
-            label = 'GPT4all-lora'
-        else:
-            label = 'alpaca-lora'
+        label = 'GPT4all-lora' if 'nomic' in fpath else 'alpaca-lora'
         plt.hist(perplexities, label=label, alpha=.5)
 
 plt.xlabel('Perplexity')
