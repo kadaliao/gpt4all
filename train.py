@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 
 def format_metrics(metrics, split, prefix=""):
-    log = f"[{split}]" + prefix
+    log = f"[{split}]{prefix}"
     log += " ".join([f"{key}: {value:.4f}" for key, value in metrics.items()])
 
     return log
@@ -52,19 +52,19 @@ def train(accelerator, config):
         # these tokens are already in the vocab, just not mapped correctly
         added_tokens = tokenizer.add_special_tokens({"bos_token": "<s>", "eos_token": "</s>", "pad_token": "<pad>"})
 
-        
+
     with accelerator.main_process_first():
         train_dataloader, val_dataloader = load_data(config, tokenizer) 
-        
+
 
     checkpoint = config["gradient_checkpointing"]
-    model = AutoModelForCausalLM.from_pretrained(config["model_name"], 
-                                                    use_cache=False if checkpoint else True,
-                                                    trust_remote_code=True) 
+    model = AutoModelForCausalLM.from_pretrained(
+        config["model_name"], use_cache=not checkpoint, trust_remote_code=True
+    ) 
 
     if added_tokens > 0:
         model.resize_token_embeddings(len(tokenizer))
-    
+
     if checkpoint:
         model.gradient_checkpointing_enable()
 
@@ -124,11 +124,14 @@ def train(accelerator, config):
 
             accelerator.backward(loss)
 
-            # log LR in case something weird happens 
-            if step > 0 and step % (config["eval_every"] // 10) == 0:
-                if config["wandb"]:
-                    curr_step = step + epoch * len(train_dataloader)
-                    accelerator.log({"lr": scheduler.get_last_lr()[0]}, step=curr_step)
+            # log LR in case something weird happens
+            if (
+                step > 0
+                and step % (config["eval_every"] // 10) == 0
+                and config["wandb"]
+            ):
+                curr_step = step + epoch * len(train_dataloader)
+                accelerator.log({"lr": scheduler.get_last_lr()[0]}, step=curr_step)
 
             if (step + 1) % gradient_accumulation_steps == 0 or step == len(train_dataloader) - 1:
                 optimizer.step()
@@ -153,7 +156,7 @@ def train(accelerator, config):
 
                 if config["wandb"]:
                     curr_step = step + epoch * len(train_dataloader)
-                    accelerator.log({**log_train, **log_val}, step=curr_step)
+                    accelerator.log(log_train | log_val, step=curr_step)
 
                 accelerator.print(f"Current LR: {scheduler.get_last_lr()[0]}")
                 accelerator.print(format_metrics(log_train, "train", f" step {step} "))
@@ -162,13 +165,13 @@ def train(accelerator, config):
                 train_loss.reset()
 
         accelerator.print(f"Epoch {epoch} finished")
-        accelerator.print(f"Pushing to HF hub")
+        accelerator.print("Pushing to HF hub")
         accelerator.wait_for_everyone()
         unwrapped_model = accelerator.unwrap_model(model)
         if accelerator.is_main_process:
             unwrapped_model.push_to_hub(config["save_name"] + "_first_epoch", private=True)
 
-            
+
     accelerator.wait_for_everyone()
     unwrapped_model = accelerator.unwrap_model(model)
     unwrapped_model.save_pretrained(

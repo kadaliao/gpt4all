@@ -43,7 +43,7 @@ def setup_model(config):
 def eval_example(model, tokenizer, example, config):
 
     prompt = example['instruction'] + ' ' + example['instances'][0]['input']
-    gt = prompt + ' ' + example['instances'][0]['output']
+    gt = f'{prompt} ' + example['instances'][0]['output']
 
     #decode several continuations and compute their page trajectories
     input = tokenizer(prompt, return_tensors="pt")
@@ -52,7 +52,7 @@ def eval_example(model, tokenizer, example, config):
     continuations = []
     tokenized_continuations = []
     trajectories = []
-    for i in range(1):
+    for _ in range(1):
         with torch.no_grad():
             outputs = model.generate(input_ids=input['input_ids'],
                                      max_new_tokens=config["max_new_tokens"],
@@ -120,7 +120,7 @@ def do_eval(config):
         all_perplexities.append(gt_perplexity)
         all_continuations.append(continuations)
 
-    with open('eval_data/eval__model-{}__lora-{}.pkl'.format(config['model_name'].replace('/', '_'), config['lora_path'].replace('/', '_')), 'wb') as f:
+    with open(f"eval_data/eval__model-{config['model_name'].replace('/', '_')}__lora-{config['lora_path'].replace('/', '_')}.pkl", 'wb') as f:
         r = {'trajectories': all_trajectories,
              'perplexities': all_perplexities,
              'continuations': all_continuations,
